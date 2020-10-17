@@ -1,6 +1,6 @@
 const inquirer = require('inquirer')
 
-const {oraLoading, getTagList, fetchRepoList, downDir} = require('./uitls/common')
+const {oraLoading, getTagList, fetchRepoList, downDir, copyTempLocalhost} = require('./uitls/common')
 
 
 module.exports = async (projectName) => {
@@ -25,6 +25,7 @@ module.exports = async (projectName) => {
     }])
 
     const target = await oraLoading(downDir, '下载项目...')(repo, tag)
+    await copyTempLocalhost(target, projectName)
     console.log(`项目名字是${projectName}`)
     console.log(`选择的仓库名称是${repo}`)
     // console.log(`仓库${repo}对应的tag列表:${tags}`)

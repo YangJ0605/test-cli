@@ -6,7 +6,9 @@ const {downloadDirectory} = require('./constants')
 const path = require('path')
 const fs = require('fs')
 const ncp = require('ncp')
-
+const MetalSmith = require('metalsmith')
+const inquirer = require('inquirer')
+const {render} = require('ejs')
 
 downloadGit = promisify(downloadGit)
 
@@ -82,14 +84,54 @@ const downDir = async (repo, tag) => {
 }
 
 const copyTempLocalhost = async (target, projectName) => {
-    const resolePath = path.join(path.resolve(), projectName)
+    const resolvePath = path.join(path.resolve(), projectName)
     if(!fs.existsSync(path.join(target, 'ask.js'))) {
-        await nep(target,  resolePath)
+        await ncp(target,  resolvePath)
         fs.remove(target)
     } else {
-        await new Promise((resolve, reject) => {
-            Metal
-        })
+        //复杂项目
+             // 1) 让用户填信息
+             await new Promise((resolve, reject) => {
+                MetalSmith(__dirname)
+                    .source(target) // 遍历下载的目录
+                    .destination(resolvePath) // 最终编译好的文件存放位置
+                    .use(async (files, metal, done) => {
+                        let args = require(path.join(target, 'ask.js'));
+                        let res = await inquirer.prompt(args);
+                        let met = metal.metadata();
+                        // 将询问的结果放到metadata中保证在下一个中间件中能够获取到
+                        Object.assign(met, res);
+                       //  ask.js 只是用于 判断是不是复杂项目 且 内容能够定制复制到本地不须要
+                        delete files['ask.js'];
+                        done();
+                    })
+                    .use((files, metal, done) => {
+                        const res = metal.metadata();
+                       //  获取文件中的内容
+                        Reflect.ownKeys(files).forEach(async (file) => {
+                           //  文件是.js或者.json才是模板引擎
+                            if (file.includes('.js') || file.includes('.json')) {
+                                let content = files[file].contents.toString(); //文件内容
+                               //  咱们将ejs模板引擎的内容找到 才编译
+                                if (content.includes('<%')) {
+                                    content = await render(content, res);
+                                    files[file].contents = Buffer.from(content); //渲染
+                                }
+                            }
+                        })
+                        done();
+
+                    })
+                    .build((err) => {
+                        if (err) {
+                            reject();
+
+                        } else {
+                            resolve();
+                        }
+                    })
+
+            });
     }
 }
 
@@ -99,5 +141,7 @@ module.exports = {
     oraLoading,
     getTagList,
     fetchRepoList,
-    downDir
+    downDir,
+    copyTempLocalhost
 }
+// https://www.shangmayuan.com/a/86bd3d7c82a74ddca9527f8b.html
